@@ -94,7 +94,7 @@ void nrf_hw_models_free_all(){
   nrf_radio_clean_up();
   nrf_ficr_clean_up();
   nrf_ppi_clean_up();
-  nrf_timer_clean_up();
+  nrf_hw_model_timer_clean_up();
 }
 
 /*
@@ -121,7 +121,7 @@ void nrf_hw_initialize(nrf_hw_sub_args_t *args){
   nrf_radio_init();
   nrf_ficr_init();
   nrf_ppi_init();
-  nrf_timer_init();
+  nrf_hw_model_timer_init();
   nrf_hw_find_next_timer_to_trigger();
 }
 
@@ -188,7 +188,7 @@ void nrf_hw_some_timer_reached() {
     nrf_rtc_timer_triggered();
     break;
   case TIMER_timer:
-    nrf_timer_timer_triggered();
+    nrf_hw_model_timer_timer_triggered();
     break;
   case RADIO_timer:
     nrf_radio_timer_triggered();
