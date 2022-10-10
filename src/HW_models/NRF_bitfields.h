@@ -8485,6 +8485,24 @@ POSSIBILITY OF SUCH DAMAGE.
 /* Register: RADIO_SHORTS */
 /* Description: Shortcut register */
 
+/* Bit 17 : Shortcut between event CCAIDLE and task STOP */
+#define RADIO_SHORTS_CCAIDLE_STOP_Pos (17UL) /*!< Position of CCAIDLE_STOP field. */
+#define RADIO_SHORTS_CCAIDLE_STOP_Msk (0x1UL << RADIO_SHORTS_CCAIDLE_STOP_Pos) /*!< Bit mask of CCAIDLE_STOP field. */
+#define RADIO_SHORTS_CCAIDLE_STOP_Disabled (0UL) /*!< Disable shortcut */
+#define RADIO_SHORTS_CCAIDLE_STOP_Enabled (1UL) /*!< Enable shortcut */
+
+/* Bit 13 : Shortcut between event CCABUSY and task DISABLE */
+#define RADIO_SHORTS_CCABUSY_DISABLE_Pos (13UL) /*!< Position of CCABUSY_DISABLE field. */
+#define RADIO_SHORTS_CCABUSY_DISABLE_Msk (0x1UL << RADIO_SHORTS_CCABUSY_DISABLE_Pos) /*!< Bit mask of CCABUSY_DISABLE field. */
+#define RADIO_SHORTS_CCABUSY_DISABLE_Disabled (0UL) /*!< Disable shortcut */
+#define RADIO_SHORTS_CCABUSY_DISABLE_Enabled (1UL) /*!< Enable shortcut */
+
+/* Bit 12 : Shortcut between event CCAIDLE and task TXEN */
+#define RADIO_SHORTS_CCAIDLE_TXEN_Pos (12UL) /*!< Position of CCAIDLE_TXEN field. */
+#define RADIO_SHORTS_CCAIDLE_TXEN_Msk (0x1UL << RADIO_SHORTS_CCAIDLE_TXEN_Pos) /*!< Bit mask of CCAIDLE_TXEN field. */
+#define RADIO_SHORTS_CCAIDLE_TXEN_Disabled (0UL) /*!< Disable shortcut */
+#define RADIO_SHORTS_CCAIDLE_TXEN_Enabled (1UL) /*!< Enable shortcut */
+
 /* Bit 8 : Shortcut between DISABLED event and RSSISTOP task */
 #define RADIO_SHORTS_DISABLED_RSSISTOP_Pos (8UL) /*!< Position of DISABLED_RSSISTOP field. */
 #define RADIO_SHORTS_DISABLED_RSSISTOP_Msk (0x1UL << RADIO_SHORTS_DISABLED_RSSISTOP_Pos) /*!< Bit mask of DISABLED_RSSISTOP field. */
@@ -8535,6 +8553,27 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /* Register: RADIO_INTENSET */
 /* Description: Enable interrupt */
+
+/* Bit 19 : Write '1' to enable interrupt for event CCASTOPPED */
+#define RADIO_INTENSET_CCASTOPPED_Pos (19UL) /*!< Position of CCASTOPPED field. */
+#define RADIO_INTENSET_CCASTOPPED_Msk (0x1UL << RADIO_INTENSET_CCASTOPPED_Pos) /*!< Bit mask of CCASTOPPED field. */
+#define RADIO_INTENSET_CCASTOPPED_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENSET_CCASTOPPED_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENSET_CCASTOPPED_Set (1UL) /*!< Enable */
+
+/* Bit 18 : Write '1' to enable interrupt for event CCABUSY */
+#define RADIO_INTENSET_CCABUSY_Pos (18UL) /*!< Position of CCABUSY field. */
+#define RADIO_INTENSET_CCABUSY_Msk (0x1UL << RADIO_INTENSET_CCABUSY_Pos) /*!< Bit mask of CCABUSY field. */
+#define RADIO_INTENSET_CCABUSY_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENSET_CCABUSY_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENSET_CCABUSY_Set (1UL) /*!< Enable */
+
+/* Bit 17 : Write '1' to enable interrupt for event CCAIDLE */
+#define RADIO_INTENSET_CCAIDLE_Pos (17UL) /*!< Position of CCAIDLE field. */
+#define RADIO_INTENSET_CCAIDLE_Msk (0x1UL << RADIO_INTENSET_CCAIDLE_Pos) /*!< Bit mask of CCAIDLE field. */
+#define RADIO_INTENSET_CCAIDLE_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENSET_CCAIDLE_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENSET_CCAIDLE_Set (1UL) /*!< Enable */
 
 /* Bit 13 : Write '1' to Enable interrupt for CRCERROR event */
 #define RADIO_INTENSET_CRCERROR_Pos (13UL) /*!< Position of CRCERROR field. */
@@ -8615,6 +8654,27 @@ POSSIBILITY OF SUCH DAMAGE.
 
 /* Register: RADIO_INTENCLR */
 /* Description: Disable interrupt */
+
+/* Bit 19 : Write '1' to disable interrupt for event CCASTOPPED */
+#define RADIO_INTENCLR_CCASTOPPED_Pos (19UL) /*!< Position of CCASTOPPED field. */
+#define RADIO_INTENCLR_CCASTOPPED_Msk (0x1UL << RADIO_INTENCLR_CCASTOPPED_Pos) /*!< Bit mask of CCASTOPPED field. */
+#define RADIO_INTENCLR_CCASTOPPED_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENCLR_CCASTOPPED_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENCLR_CCASTOPPED_Clear (1UL) /*!< Disable */
+
+/* Bit 18 : Write '1' to disable interrupt for event CCABUSY */
+#define RADIO_INTENCLR_CCABUSY_Pos (18UL) /*!< Position of CCABUSY field. */
+#define RADIO_INTENCLR_CCABUSY_Msk (0x1UL << RADIO_INTENCLR_CCABUSY_Pos) /*!< Bit mask of CCABUSY field. */
+#define RADIO_INTENCLR_CCABUSY_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENCLR_CCABUSY_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENCLR_CCABUSY_Clear (1UL) /*!< Disable */
+
+/* Bit 17 : Write '1' to disable interrupt for event CCAIDLE */
+#define RADIO_INTENCLR_CCAIDLE_Pos (17UL) /*!< Position of CCAIDLE field. */
+#define RADIO_INTENCLR_CCAIDLE_Msk (0x1UL << RADIO_INTENCLR_CCAIDLE_Pos) /*!< Bit mask of CCAIDLE field. */
+#define RADIO_INTENCLR_CCAIDLE_Disabled (0UL) /*!< Read: Disabled */
+#define RADIO_INTENCLR_CCAIDLE_Enabled (1UL) /*!< Read: Enabled */
+#define RADIO_INTENCLR_CCAIDLE_Clear (1UL) /*!< Disable */
 
 /* Bit 13 : Write '1' to Disable interrupt for CRCERROR event */
 #define RADIO_INTENCLR_CRCERROR_Pos (13UL) /*!< Position of CRCERROR field. */

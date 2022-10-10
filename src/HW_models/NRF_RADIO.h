@@ -30,12 +30,15 @@ void nrf_radio_tasks_bcstart ();
 void nrf_radio_tasks_bcstop ();
 
 void nrf_radio_bitcounter_timer_triggered();
+void nrf_radio_cca_timer_triggered();
 
 void nrf_radio_regw_sideeffects_BCC();
 void nrf_radio_regw_sideeffects_POWER();
 void nrf_radio_regw_sideeffects_TASKS_DISABLE();
 void nrf_radio_regw_sideeffects_TASKS_RSSISTART();
 void nrf_radio_regw_sideeffects_TASKS_RSSISTOP();
+void nrf_radio_regw_sideeffects_TASKS_CCASTOP();
+void nrf_radio_regw_sideeffects_TASKS_CCASTART();
 void nrf_radio_regw_sideeffects_TASKS_RXEN();
 void nrf_radio_regw_sideeffects_TASKS_TXEN();
 void nrf_radio_regw_sideeffects_INTENSET();

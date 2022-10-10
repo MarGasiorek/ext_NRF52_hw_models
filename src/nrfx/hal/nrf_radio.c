@@ -26,6 +26,12 @@ void nrf_radio_task_trigger(NRF_RADIO_Type * p_reg, nrf_radio_task_t task)
   } else if ( task == NRF_RADIO_TASK_RSSISTART ) {
     p_reg->TASKS_RSSISTART = 1;
     nrf_radio_regw_sideeffects_TASKS_RSSISTART();
+  } else if ( task == NRF_RADIO_TASK_CCASTOP ) {
+    p_reg->TASKS_CCASTOP = 1;
+    nrf_radio_regw_sideeffects_TASKS_CCASTOP();
+  } else if ( task == NRF_RADIO_TASK_CCASTART ) {
+    p_reg->TASKS_CCASTART = 1;
+    nrf_radio_regw_sideeffects_TASKS_CCASTART();
   } else {
     bs_trace_error_line_time("Not supported task started in nrf_radio\n");
   }

@@ -20,6 +20,9 @@
 #include "NRF_HWLowL.h"
 #include "crc_ble.h"
 
+/* 8 symbols, where 1 symbol = 4 bits -> IEEE 802.15.4 */
+#define CCA_SURVEY_PERIOD_IN_BITS (8.0 * 4.0)
+
 /**
  * RADIO — 2.4 GHz Radio
  * http://infocenter.nordicsemi.com/topic/com.nordic.infocenter.nrf52840.ps/radio.html?cp=2_0_0_21#concept_lhd_ygj_4r
@@ -69,6 +72,7 @@ static struct {
 bs_time_t Timer_RADIO = TIME_NEVER; //main radio timer
 bs_time_t Timer_RADIO_abort_reeval = TIME_NEVER; //Abort reevaluation response timer, this timer must have the lowest priority of all events (which may cause an abort)
 bs_time_t Timer_RADIO_bitcounter = TIME_NEVER;
+bs_time_t Timer_RADIO_cca = TIME_NEVER;
 
 static enum {TIFS_DISABLE = 0, TIFS_WAITING_FOR_DISABLE, TIFS_TRIGGERING_TRX_EN } TIFS_state = TIFS_DISABLE;
 bool TIFS_ToTxNotRx = false;
@@ -128,12 +132,18 @@ static bool radio_on = false;
 
 static bool rssi_sampling_on = false;
 
+static bool cca_timer_is_runing = false;
+
 static bs_time_t Time_BitCounterStarted = TIME_NEVER;
 static bool bit_counter_running = false;
 
 static bool from_hw_tifs = false; /* Unfortunate hack due to the SW racing the HW to clear SHORTS*/
 
 static void nrf_radio_stop_bit_counter();
+static void nrf_radio_tasks_ccastart();
+static void nrf_radio_tasks_ccastop();
+static void signal_CCAIDLE();
+static void signal_CCABUSY();
 
 static void radio_reset() {
   memset(&NRF_RADIO_regs, 0, sizeof(NRF_RADIO_regs));
@@ -146,9 +156,11 @@ static void radio_reset() {
   TIFS_state = TIFS_DISABLE;
   TIFS_ToTxNotRx = false;
   Timer_TIFS = TIME_NEVER;
+  Timer_RADIO_cca = TIME_NEVER;
 
   Timer_RADIO_bitcounter = TIME_NEVER;
   bit_counter_running = 0;
+  cca_timer_is_runing = false;
 }
 
 void nrf_radio_init() {
@@ -425,7 +437,11 @@ static void signal_READY(){
     nrf_radio_tasks_start();
   }
 
-  if ( RADIO_INTEN & RADIO_INTENSET_READY_Msk ){
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_RXREADY_CCASTART_Msk ) {
+    nrf_radio_tasks_ccastart();
+  }
+
+  if ( RADIO_INTEN & RADIO_INTENSET_READY_Msk ) {
     hw_irq_ctrl_set_irq(RADIO_IRQn);
   }
 }
@@ -1013,7 +1029,7 @@ static void start_Rx(){
     bits_per_us = 2;
   }
 
-  ongoing_rx_RADIO_status.CRC_duration = 3*8/bits_per_us;
+  ongoing_rx_RADIO_status.CRC_duration = 3*8.0/bits_per_us;
   ongoing_rx_RADIO_status.CRC_OK = false;
   NRF_RADIO_regs.CRCSTATUS = 0;
 
@@ -1024,13 +1040,13 @@ static void start_Rx(){
   ongoing_rx.bps = bits_per_us*1000000;
   ongoing_rx.antenna_gain = 0;
 
-  ongoing_rx.header_duration  = header_length*8/bits_per_us;
+  ongoing_rx.header_duration  = header_length*8.0/bits_per_us;
   ongoing_rx.header_threshold = 0; //(<=) we tolerate 0 bit errors in the header which will be found in the crc (we may want to tune this)
   ongoing_rx.sync_threshold   = 2; //(<) we tolerate less than 2 errors in the preamble and sync word together
 
   ongoing_rx.phy_address  = address;
 
-  ongoing_rx.pream_and_addr_duration = (preamble_length + address_length)*8/bits_per_us;
+  ongoing_rx.pream_and_addr_duration = (preamble_length + address_length)*8.0/bits_per_us;
 
   ongoing_rx.scan_duration = 0xFFFFFFFF; //the phy does not support infinite scans.. but this is 1 hour..
 
@@ -1209,7 +1225,7 @@ void nrf_radio_regw_sideeffects_BCC() {
   if (!bit_counter_running){
     return;
   }
-  Timer_RADIO_bitcounter = Time_BitCounterStarted + NRF_RADIO_regs.BCC/bits_per_us;
+  Timer_RADIO_bitcounter = Time_BitCounterStarted + (bs_time_t)(NRF_RADIO_regs.BCC / bits_per_us);
   if (Timer_RADIO_bitcounter < tm_get_hw_time()) {
     bs_trace_warning_line_time("NRF_RADIO: Reprogrammed bitcounter with a BCC which has already"
         "passed (%"PRItime") => we ignore it\n",
@@ -1230,5 +1246,79 @@ void nrf_radio_regw_sideeffects_TASKS_BCSTOP() {
   if (NRF_RADIO_regs.TASKS_BCSTOP) {
     NRF_RADIO_regs.TASKS_BCSTOP = 0;
     nrf_radio_tasks_bcstop();
+  }
+}
+
+/******************************
+ * CCA functionality: *
+ ******************************/
+static void signal_CCAIDLE() {
+  NRF_RADIO_regs.EVENTS_CCAIDLE = 1;
+  nrf_ppi_event(RADIO_EVENTS_CCAIDLE);
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_CCAIDLE_TXEN_Msk ) {
+    nrf_radio_tasks_txen();
+  }
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_CCAIDLE_STOP_Msk ) {
+    nrf_radio_tasks_stop();
+  }
+
+  if ( RADIO_INTEN & RADIO_INTENSET_CCAIDLE_Msk ) {
+    hw_irq_ctrl_set_irq(RADIO_IRQn);
+  }
+}
+
+static void signal_CCABUSY() {
+  NRF_RADIO_regs.EVENTS_CCABUSY = 1;
+  nrf_ppi_event(RADIO_EVENTS_CCABUSY);
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_CCABUSY_DISABLE_Msk ) {
+    nrf_radio_tasks_disable();
+  }
+
+  if ( RADIO_INTEN & RADIO_INTENSET_CCABUSY_Msk ) {
+    hw_irq_ctrl_set_irq(RADIO_IRQn);
+  }
+}
+
+static void nrf_radio_tasks_ccastart() {
+  if ( cca_timer_is_runing )
+  {
+    bs_trace_warning_line_time("NRF_RADIO: CCA measurement is running - event ignored.\n");
+    return;
+  }
+  cca_timer_is_runing = true;
+  Timer_RADIO_cca = tm_get_hw_time() + (bs_time_t)(CCA_SURVEY_PERIOD_IN_BITS / bits_per_us);
+  nrf_hw_find_next_timer_to_trigger();
+}
+
+static void nrf_radio_tasks_ccastop() {
+  Timer_RADIO_cca = TIME_NEVER;
+  cca_timer_is_runing = false;
+  nrf_hw_find_next_timer_to_trigger();
+
+  NRF_RADIO_regs.EVENTS_CCASTOPPED = 1;
+  nrf_ppi_event(RADIO_EVENTS_CCASTOPPED);
+}
+
+void nrf_radio_cca_timer_triggered() {
+  Timer_RADIO_cca = TIME_NEVER;
+  cca_timer_is_runing = false;
+  nrf_hw_find_next_timer_to_trigger();
+  signal_CCAIDLE();
+}
+
+void nrf_radio_regw_sideeffects_TASKS_CCASTOP() {
+  if ( NRF_RADIO_regs.TASKS_CCASTOP ){
+    NRF_RADIO_regs.TASKS_CCASTOP = 0;
+    nrf_radio_tasks_ccastop();
+  }
+}
+
+void nrf_radio_regw_sideeffects_TASKS_CCASTART() {
+  if ( NRF_RADIO_regs.TASKS_CCASTART ){
+    NRF_RADIO_regs.TASKS_CCASTART = 0;
+    nrf_radio_tasks_ccastart();
   }
 }
