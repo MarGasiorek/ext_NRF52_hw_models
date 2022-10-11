@@ -904,7 +904,7 @@ static void start_Tx(){
 }
 
 uint32_t RSSI_value_to_modem_format(double rssi_value){
-  rssi_value = -BS_MAX(rssi_value,-127);
+  rssi_value = -BS_MAX(rssi_value,-63);
   rssi_value = BS_MAX(rssi_value,0);
   return (uint32_t)rssi_value;
 }
@@ -943,12 +943,18 @@ static void handle_Rx_response(int ret){
             + (bs_time_t)((2+length)*8/bits_per_us)
             + ongoing_rx_RADIO_status.CRC_duration); //Provisional value
 
+    const uint32_t rssi = RSSI_value_to_modem_format(p2G4_RSSI_value_to_dBm(ongoing_rx_done.rssi.RSSI));
+    const uint8_t LQI = (uint8_t)(rssi>63 ? 255: rssi*4);
+
     if (ongoing_rx_done.packet_size >= 5) { /*At least the header and CRC, otherwise better to not try to copy it*/
       ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0] = rx_buf[0];
       ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1] = rx_buf[1];
       /* We cheat a bit and copy the whole packet already (The AAR block will look in Adv packets after 64 bits)*/
       memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset],
           &rx_buf[2] , length);
+        
+      memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset + length], &LQI, sizeof(LQI));
+      
     }
 
     radio_sub_state = RX_WAIT_FOR_ADDRESS_END;
