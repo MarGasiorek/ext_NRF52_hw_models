@@ -437,42 +437,44 @@ static void signal_READY(){
     nrf_radio_tasks_start();
   }
 
-  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_RXREADY_CCASTART_Msk ) {
-    nrf_radio_tasks_ccastart();
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_READY_EDSTART_Msk ) {
+    nrf_radio_tasks_start();
   }
 
   if ( RADIO_INTEN & RADIO_INTENSET_READY_Msk ) {
     hw_irq_ctrl_set_irq(RADIO_IRQn);
   }
 }
-/*
- * The TX and RX READY missing in the registers header..
+
 static void signal_TXREADY(){
   NRF_RADIO_regs.EVENTS_TXREADY = 1;
-  NRF_PPI_Event(RADIO_EVENTS_TXREADY);
+  nrf_ppi_event(RADIO_EVENTS_TXREADY);
 
   if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_TXREADY_START_Msk ) {
-    NRF_RADIO_TASK_START();
+    nrf_radio_tasks_start();
   }
 
   if ( RADIO_INTEN & RADIO_INTENSET_TXREADY_Msk ){
-    hw_irq_controller_set_irq(NRF5_IRQ_RADIO_IRQn);
+    hw_irq_ctrl_set_irq(RADIO_IRQn);
   }
 }
 
 static void signal_RXREADY(){
   NRF_RADIO_regs.EVENTS_RXREADY = 1;
-  NRF_PPI_Event(RADIO_EVENTS_RXREADY);
+  nrf_ppi_event(RADIO_EVENTS_RXREADY);
 
   if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_RXREADY_START_Msk ) {
-    NRF_RADIO_TASK_START();
+    nrf_radio_tasks_start();
+  }
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_RXREADY_CCASTART_Msk ) {
+    nrf_radio_tasks_ccastart();
   }
 
   if ( RADIO_INTEN & RADIO_INTENSET_RXREADY_Msk ){
-    hw_irq_controller_set_irq(NRF5_IRQ_RADIO_IRQn);
+    hw_irq_ctrl_set_irq(RADIO_IRQn);
   }
 }
-*/
 
 static void signal_RSSIEND(){
   NRF_RADIO_regs.EVENTS_RSSIEND = 1;
@@ -609,14 +611,14 @@ void nrf_radio_timer_triggered(){
     Timer_RADIO = TIME_NEVER;
     nrf_hw_find_next_timer_to_trigger();
     signal_READY();
-    //signal_TXREADY();
+    signal_TXREADY();
   } else if ( radio_state == RXRU ){
     radio_state = RXIDLE;
     NRF_RADIO_regs.STATE = RXIDLE;
     Timer_RADIO = TIME_NEVER;
     nrf_hw_find_next_timer_to_trigger();
     signal_READY();
-    //signal_RXREADY();
+    signal_RXREADY();
   } else if ( radio_state == TX ){
     if ( radio_sub_state == TX_WAIT_FOR_ADDRESS_END ){
       radio_sub_state = TX_WAIT_FOR_PAYLOAD_END;
@@ -784,7 +786,7 @@ static void start_Tx(){
   NRF_RADIO_regs.STATE = TX;
 
   {// a few checks to ensure the model is only used with the currently supported packet format
-    int checked =NRF_RADIO_regs.PCNF0 &
+    int checked = NRF_RADIO_regs.PCNF0 &
         (RADIO_PCNF0_PLEN_Msk
             | RADIO_PCNF0_S1LEN_Msk
             | RADIO_PCNF0_S0LEN_Msk
@@ -814,15 +816,26 @@ static void start_Tx(){
             "NRF_RADIO: For 2 Mbps only BLE packet format is supported so far (PCNF0=%u)\n",
             NRF_RADIO_regs.PCNF0);
       }
+    } else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ieee802154_250Kbit) {
 
+      int check = ( ( 8 << RADIO_PCNF0_LFLEN_Pos )
+          | ( RADIO_PCNF0_PLEN_32bitZero << RADIO_PCNF0_PLEN_Pos ) );
+
+      if (checked != check) {
+        bs_trace_error_line_time(
+            "NRF_RADIO: For 250 Kbit only Ieee802154 packet format is supported so far (PCNF0=%u)\n",
+            NRF_RADIO_regs.PCNF0);
+      }
     } else {
       bs_trace_error_line_time(
-          "NRF_RADIO: Only 1&2 Mbps BLE packet format supported so far (MODE=%u)\n",
+          "NRF_RADIO: Only 1&2 Mbps BLE and Ieee802154 packet format supported so far (MODE=%u)\n",
           NRF_RADIO_regs.MODE);
     }
 
-    if ( (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)
-        != (RADIO_CRCCNF_LEN_Three << RADIO_CRCCNF_LEN_Pos) ) {
+    if ( ((NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)
+        != (RADIO_CRCCNF_LEN_Three << RADIO_CRCCNF_LEN_Pos)) &&
+        ((NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)
+        != (RADIO_CRCCNF_LEN_Two << RADIO_CRCCNF_LEN_Pos)) ) {
       bs_trace_error_line_time(
           "NRF_RADIO: CRCCNF Only 3 bytes CRC is supported (CRCCNF=%u)\n",
           NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk);
@@ -839,7 +852,7 @@ static void start_Tx(){
   uint8_t header_len  = 2;
   uint8_t payload_len = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
   //Note: I assume in Tx the length is always < PCNF1.MAXLEN and that STATLEN is always 0 (otherwise add a check)
-  uint8_t crc_len     = 3;
+  uint8_t crc_len     = (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk);
 
   uint32_t crc_init = NRF_RADIO_regs.CRCINIT & RADIO_CRCINIT_CRCINIT_Msk;
 
@@ -856,11 +869,20 @@ static void start_Tx(){
     preamble_len = 1; //1 byte
     ongoing_tx.radio_params.modulation = P2G4_MOD_BLE;
     bits_per_us = 1;
-  } else { //2Mbps
+  }else{
     preamble_len = 2; //2 bytes
     ongoing_tx.radio_params.modulation = P2G4_MOD_BLE2M;
     bits_per_us = 2;
   }
+  // } else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
+  //   preamble_len = 2; //2 bytes
+  //   ongoing_tx.radio_params.modulation = P2G4_MOD_BLE2M;
+  //   bits_per_us = 2;
+  // } else { //Ieee802154
+  //   preamble_len = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
+  //   ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
+  //   bits_per_us = 0.25;
+  // }
 
   tx_buf[0] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0];
   tx_buf[1] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
@@ -1029,13 +1051,22 @@ static void start_Rx(){
     preamble_length = 1; //1 byte
     ongoing_rx.radio_params.modulation = P2G4_MOD_BLE;
     bits_per_us = 1;
-  } else { //2Mbps
+  } else {
     preamble_length = 2; //2 bytes
     ongoing_rx.radio_params.modulation = P2G4_MOD_BLE2M;
     bits_per_us = 2;
   }
+  // else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
+  //   preamble_length = 2; //2 bytes
+  //   ongoing_rx.radio_params.modulation = P2G4_MOD_BLE2M;
+  //   bits_per_us = 2;
+  // } else { //Ieee802154
+  //   preamble_length = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
+  //   ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
+  //   bits_per_us = 0.25;
+  // }
 
-  ongoing_rx_RADIO_status.CRC_duration = 3*8.0/bits_per_us;
+  ongoing_rx_RADIO_status.CRC_duration = (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)*8.0/bits_per_us;
   ongoing_rx_RADIO_status.CRC_OK = false;
   NRF_RADIO_regs.CRCSTATUS = 0;
 

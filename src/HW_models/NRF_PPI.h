@@ -48,9 +48,10 @@ typedef enum { //Note that, for performance, it is better to leave commented the
   RADIO_EVENTS_CCABUSY    ,
   RADIO_EVENTS_CCASTOPPED ,
 //  RADIO_EVENTS_RATEBOOST  ,
-//  RADIO_EVENTS_TXREADY    ,
-//  RADIO_EVENTS_RXREADY    ,
+  RADIO_EVENTS_TXREADY    ,
+  RADIO_EVENTS_RXREADY    ,
 //  RADIO_EVENTS_MHRMATCH   ,
+  RADIO_EVENTS_SYNC,
 //  RADIO_EVENTS_PHYEND     ,
 
 //  2 0x40002000 UARTE
