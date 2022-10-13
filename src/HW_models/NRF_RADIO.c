@@ -869,17 +869,11 @@ static void start_Tx(){
   //TOLOW: Add support for other packet formats and bitrates
   uint8_t preamble_len;
   uint8_t address_len = 4;
-  uint8_t header_len  = 2;
-  uint8_t payload_len = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
+  uint8_t header_len = 0;
   //Note: I assume in Tx the length is always < PCNF1.MAXLEN and that STATLEN is always 0 (otherwise add a check)
   uint8_t crc_len     = (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk);
 
   uint32_t crc_init = NRF_RADIO_regs.CRCINIT & RADIO_CRCINIT_CRCINIT_Msk;
-
-  //Note: we only support BALEN = 3 (== BLE 4 byte addresses)
-  //Note: We only support address 0 being used
-  uint32_t address = ( ( NRF_RADIO_regs.PREFIX0 & RADIO_PREFIX0_AP0_Msk ) << 24 )
-                       | (NRF_RADIO_regs.BASE0 >> 8);
 
   uint32_t freq_off = NRF_RADIO_regs.FREQUENCY & RADIO_FREQUENCY_FREQUENCY_Msk;
   //Note only default freq. map supported
@@ -889,25 +883,40 @@ static void start_Tx(){
     preamble_len = 1; //1 byte
     ongoing_tx.radio_params.modulation = P2G4_MOD_BLE;
     bits_per_us = 1;
-  }else{
+  } else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
     preamble_len = 2; //2 bytes
     ongoing_tx.radio_params.modulation = P2G4_MOD_BLE2M;
     bits_per_us = 2;
-  }
-  // } else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
-  //   preamble_len = 2; //2 bytes
-  //   ongoing_tx.radio_params.modulation = P2G4_MOD_BLE2M;
-  //   bits_per_us = 2;
-  // } else { //Ieee802154
-  //   preamble_len = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
-  //   ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
-  //   bits_per_us = 0.25;
-  // }
+  } else { //Ieee802154
+    preamble_len = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
+    // ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
+    // bits_per_us = 0.25;
 
-  tx_buf[0] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0];
-  tx_buf[1] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
-  memcpy(&tx_buf[2], &((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + S1Offset], payload_len);
-  append_crc_ble(tx_buf, 2/*header*/ + payload_len, crc_init);
+    ongoing_tx.radio_params.modulation = P2G4_MOD_BLE;
+    bits_per_us = 1;
+  }
+
+  uint32_t address;
+  uint8_t payload_len;
+
+  if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
+    header_len  = 2;
+    //Note: we only support BALEN = 3 (== BLE 4 byte addresses)
+    //Note: We only support address 0 being used
+    address = ( ( NRF_RADIO_regs.PREFIX0 & RADIO_PREFIX0_AP0_Msk ) << 24 )
+                       | (NRF_RADIO_regs.BASE0 >> 8);
+    payload_len = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
+    tx_buf[0] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0];
+    tx_buf[1] = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1];
+    memcpy(&tx_buf[2], &((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + S1Offset], payload_len);
+    append_crc_ble(tx_buf, 2/*header*/ + payload_len, crc_init);
+  } else {
+    address = 0x000000A7;
+    payload_len = ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0];
+    memcpy(tx_buf, (uint8_t*)NRF_RADIO_regs.PACKETPTR, payload_len);
+    // CRC - fake value
+    memset(&tx_buf[payload_len], 0xAA, 2);
+  }
 
   uint packet_bitlen = 0;
   packet_bitlen += preamble_len*8 + address_len*8;
@@ -970,8 +979,15 @@ static void handle_Rx_response(int ret){
     tm_update_last_phy_sync_time(address_time);
 
     ongoing_rx_RADIO_status.ADDRESS_End_Time = address_time + get_Rx_chain_delay();
-    uint length = rx_buf[1];
+    uint length;
     uint max_length = (NRF_RADIO_regs.PCNF1 & NFCT_MAXLEN_MAXLEN_Msk) >> NFCT_MAXLEN_MAXLEN_Pos;
+
+    if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
+      length = rx_buf[1];
+    } else {
+      length = rx_buf[0];
+    }
+
     if (length > max_length){
       length  = max_length;
       //TODO: check packet length. If too long the packet should be truncated and not accepted from the phy, [we already have it in the buffer and we will have a CRC error anyhow. And we cannot let the phy run for longer than we will]
@@ -986,16 +1002,20 @@ static void handle_Rx_response(int ret){
             + ongoing_rx_RADIO_status.CRC_duration); //Provisional value
 
     const uint32_t rssi = RSSI_value_to_modem_format(p2G4_RSSI_value_to_dBm(ongoing_rx_done.rssi.RSSI));
-    const uint8_t LQI = (uint8_t)(rssi>63 ? 255: rssi*4);
+    const uint8_t LQI = (uint8_t)((rssi > 63) ? 255 : (rssi * 4));
 
     if (ongoing_rx_done.packet_size >= 5) { /*At least the header and CRC, otherwise better to not try to copy it*/
-      ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0] = rx_buf[0];
-      ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1] = rx_buf[1];
-      /* We cheat a bit and copy the whole packet already (The AAR block will look in Adv packets after 64 bits)*/
-      memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset],
-          &rx_buf[2] , length);
-        
-      memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset + length], &LQI, sizeof(LQI));
+      if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
+        ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[0] = rx_buf[0];
+        ((uint8_t*)NRF_RADIO_regs.PACKETPTR)[1] = rx_buf[1];
+        /* We cheat a bit and copy the whole packet already (The AAR block will look in Adv packets after 64 bits)*/
+        memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset],
+            &rx_buf[2] , length);
+        memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[2 + ongoing_rx_RADIO_status.S1Offset + length], &LQI, sizeof(LQI));
+      } else {
+        memcpy((uint8_t*)NRF_RADIO_regs.PACKETPTR, rx_buf, length);
+        memcpy(&((uint8_t*)NRF_RADIO_regs.PACKETPTR)[length-1], &LQI, sizeof(LQI));
+      }
       
     }
 
@@ -1015,7 +1035,11 @@ static void handle_Rx_response(int ret){
 
     if ( ( ongoing_rx_done.status == P2G4_RXSTATUS_OK ) &&
         ( ongoing_rx_done.packet_size > 5 ) ) {
-      memcpy((void*)&NRF_RADIO_regs.RXCRC, &rx_buf[2 + rx_buf[1]], 3);
+          if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
+            memcpy((void*)&NRF_RADIO_regs.RXCRC, &rx_buf[2 + rx_buf[1]], 3);
+          } else {
+            memcpy((void*)&NRF_RADIO_regs.RXCRC, &rx_buf[rx_buf[0]], 2);
+          }
     }
     if ( ongoing_rx_done.status == P2G4_RXSTATUS_OK ){
       ongoing_rx_RADIO_status.CRC_OK = 1;
@@ -1057,11 +1081,10 @@ static void start_Rx(){
   //TOLOW: Add support for other packet formats and bitrates
   uint8_t preamble_length;
   uint8_t address_length  = 4;
-  uint8_t header_length   = 2;
+  uint8_t header_length   = 0;
   //Note: we only support BALEN = 3 (== BLE 4 byte addresses)
   //Note: We only support address 0 being used
-  uint32_t address = ( ( NRF_RADIO_regs.PREFIX0 & RADIO_PREFIX0_AP0_Msk ) << 24 )
-                                          | (NRF_RADIO_regs.BASE0 >> 8);
+  uint32_t address;
 
   uint32_t freq_off = NRF_RADIO_regs.FREQUENCY & RADIO_FREQUENCY_FREQUENCY_Msk;
 
@@ -1071,20 +1094,28 @@ static void start_Rx(){
     preamble_length = 1; //1 byte
     ongoing_rx.radio_params.modulation = P2G4_MOD_BLE;
     bits_per_us = 1;
-  } else {
+  } else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
     preamble_length = 2; //2 bytes
     ongoing_rx.radio_params.modulation = P2G4_MOD_BLE2M;
     bits_per_us = 2;
+  } else { //Ieee802154
+    preamble_length = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
+    //ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
+    //bits_per_us = 0.25;
+
+    ongoing_rx.radio_params.modulation = P2G4_MOD_BLE;
+    bits_per_us = 1;
   }
-  // else if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
-  //   preamble_length = 2; //2 bytes
-  //   ongoing_rx.radio_params.modulation = P2G4_MOD_BLE2M;
-  //   bits_per_us = 2;
-  // } else { //Ieee802154
-  //   preamble_length = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
-  //   ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
-  //   bits_per_us = 0.25;
-  // }
+
+  if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
+    header_length  = 2;
+    //Note: we only support BALEN = 3 (== BLE 4 byte addresses)
+    //Note: We only support address 0 being used
+    address = ( ( NRF_RADIO_regs.PREFIX0 & RADIO_PREFIX0_AP0_Msk ) << 24 )
+                       | (NRF_RADIO_regs.BASE0 >> 8);
+  } else {
+    address = 0x000000A7;
+  }
 
   ongoing_rx_RADIO_status.CRC_duration = (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)*8.0/bits_per_us;
   ongoing_rx_RADIO_status.CRC_OK = false;
