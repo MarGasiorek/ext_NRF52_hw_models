@@ -146,6 +146,7 @@ static void nrf_radio_tasks_ccastart();
 static void nrf_radio_tasks_ccastop();
 static void signal_CCAIDLE();
 static void signal_CCABUSY();
+static void signal_PHYEND();
 
 static void radio_reset() {
   memset(&NRF_RADIO_regs, 0, sizeof(NRF_RADIO_regs));
@@ -649,6 +650,7 @@ void nrf_radio_timer_triggered(){
       NRF_RADIO_regs.STATE = TXIDLE;
       Timer_RADIO = TIME_NEVER;
       signal_END();
+      signal_PHYEND();
       maybe_prepare_TIFS(true);
     }  else { //SUB_STATE_INVALID
       bs_trace_error_time_line("programming error\n");
@@ -680,11 +682,13 @@ void nrf_radio_timer_triggered(){
         signal_CRCERROR();
       }
       signal_END();
+      signal_PHYEND();
       radio_disable_pre_irq_trigger = true;
       maybe_prepare_TIFS(false);
     } else { //SUB_STATE_INVALID
       bs_trace_error_time_line("programming error\n");
     }
+    nrf_hw_find_next_timer_to_trigger();
   } else if ( radio_state == TXDISABLE ){
     radio_state = DISABLED;
     NRF_RADIO_regs.STATE = DISABLED;
@@ -1375,3 +1379,24 @@ void nrf_radio_regw_sideeffects_TASKS_CCASTART() {
     nrf_radio_tasks_ccastart();
   }
 }
+
+/******************************
+ * PHYEND: *
+ ******************************/
+static void signal_PHYEND() {
+  NRF_RADIO_regs.EVENTS_PHYEND = 1;
+  nrf_ppi_event(RADIO_EVENTS_PHYEND);
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_PHYEND_DISABLE_Msk ) {
+    nrf_radio_tasks_disable();
+  }
+
+  if ( NRF_RADIO_regs.SHORTS & RADIO_SHORTS_PHYEND_START_Msk ) {
+    nrf_radio_tasks_start();
+  }
+
+  if ( RADIO_INTEN & RADIO_INTENSET_PHYEND_Msk ) {
+    hw_irq_ctrl_set_irq(RADIO_IRQn);
+  }
+}
+
