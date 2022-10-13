@@ -153,6 +153,7 @@ void nrf_hw_some_timer_reached() {
     break;
   case irq_ctrl_timer:
     bs_trace_raw_manual_time(8, tm_get_abs_time(),"NRF HW: IRQ ctrl timer\n");
+    nrf_pre_irq_radio_disable();
     hw_irq_ctrl_timer_triggered();
     break;
   case RNG_timer:

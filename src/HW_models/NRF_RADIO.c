@@ -134,6 +134,8 @@ static bool rssi_sampling_on = false;
 
 static bool cca_timer_is_runing = false;
 
+static bool radio_disable_pre_irq_trigger = false;
+
 static bs_time_t Time_BitCounterStarted = TIME_NEVER;
 static bool bit_counter_running = false;
 
@@ -603,6 +605,19 @@ void maybe_prepare_TIFS(bool Tx_Not_Rx){
   TIFS_state = TIFS_WAITING_FOR_DISABLE;
 }
 
+void nrf_pre_irq_radio_disable(){
+  if(radio_disable_pre_irq_trigger &&
+    (radio_state == RXDISABLE) &&
+    (NRF_RADIO_regs.STATE == RXDISABLE)) {
+
+    radio_state = DISABLED;
+    NRF_RADIO_regs.STATE = DISABLED;
+    Timer_RADIO = TIME_NEVER;
+    signal_DISABLED();
+  }
+  radio_disable_pre_irq_trigger = false;
+}
+
 void nrf_radio_timer_triggered(){
 
   if ( radio_state == TXRU ){
@@ -665,6 +680,7 @@ void nrf_radio_timer_triggered(){
         signal_CRCERROR();
       }
       signal_END();
+      radio_disable_pre_irq_trigger = true;
       maybe_prepare_TIFS(false);
     } else { //SUB_STATE_INVALID
       bs_trace_error_time_line("programming error\n");
