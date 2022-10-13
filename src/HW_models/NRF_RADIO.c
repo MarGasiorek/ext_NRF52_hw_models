@@ -1126,7 +1126,8 @@ static void start_Rx(){
   radio_sub_state = SUB_STATE_INVALID;
   Timer_RADIO = TIME_NEVER;
   nrf_hw_find_next_timer_to_trigger();
-
+  nrf_ppi_event(RADIO_EVENTS_SYNC);
+  
   handle_Rx_response(ret);
 }
 
