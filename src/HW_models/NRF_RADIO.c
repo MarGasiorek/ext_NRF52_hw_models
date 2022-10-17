@@ -1002,7 +1002,7 @@ static void handle_Rx_response(int ret){
             + ongoing_rx_RADIO_status.CRC_duration); //Provisional value
 
     const uint32_t rssi = RSSI_value_to_modem_format(p2G4_RSSI_value_to_dBm(ongoing_rx_done.rssi.RSSI));
-    const uint8_t LQI = (uint8_t)((rssi > 63) ? 255 : (rssi * 4));
+    const uint8_t LQI = (uint8_t)((rssi > 63) ? 64 : rssi);
 
     if (ongoing_rx_done.packet_size >= 5) { /*At least the header and CRC, otherwise better to not try to copy it*/
       if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
