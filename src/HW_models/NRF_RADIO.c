@@ -226,9 +226,11 @@ static bs_time_t get_rampup_time(bool TxNotRx, bool from_hw_TIFS) {
   } else {
     HWTIFS = from_hw_TIFS | HW_TIFS_enabled();
   }
-  if (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) {
+  if ((NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ble_2Mbit) ||
+   (NRF_RADIO_regs.MODE == RADIO_MODE_MODE_Ieee802154_250Kbit)) {
     Mbps2 = 1;
   }
+
   if (TxNotRx) {
     return radio_timings.TX_RU_time[Mbps2][fast][HWTIFS];
   } else {
