@@ -890,10 +890,9 @@ static void start_Tx(){
   } else { //Ieee802154
     preamble_len = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
     // ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
-    // bits_per_us = 0.25;
+    bits_per_us = 0.25;
 
     ongoing_tx.radio_params.modulation = P2G4_MOD_BLE;
-    bits_per_us = 1;
   }
 
   uint32_t address;
@@ -934,7 +933,7 @@ static void start_Tx(){
 
   bs_time_t tx_start_time = tm_get_abs_time() + radio_timings.TX_chain_delay;
   ongoing_tx.start_time = hwll_phy_time_from_dev(tx_start_time);
-  ongoing_tx.end_time = ongoing_tx.start_time + (bs_time_t)(packet_bitlen / bits_per_us);
+  ongoing_tx.end_time = ongoing_tx.start_time + (bs_time_t)((double)packet_bitlen / bits_per_us);
 
   //Prepare abort times:
   next_recheck_time = abort_ctrl_next_reevaluate_abort_time();
@@ -945,9 +944,9 @@ static void start_Tx(){
   int ret = p2G4_dev_req_tx_nc_b(&ongoing_tx, tx_buf,  &ongoing_tx_done);
   handle_Tx_response(ret);
 
-  TX_ADDRESS_end_time = tm_get_hw_time() + (bs_time_t)((preamble_len*8 + address_len*8)/bits_per_us);
-  TX_PAYLOAD_end_time = TX_ADDRESS_end_time + (bs_time_t)(8*(header_len + payload_len)/bits_per_us);
-  TX_CRC_end_time = TX_PAYLOAD_end_time + (bs_time_t)(crc_len*8/bits_per_us);
+  TX_ADDRESS_end_time = tm_get_hw_time() + (bs_time_t)((double)(preamble_len*8 + address_len*8)/bits_per_us);
+  TX_PAYLOAD_end_time = TX_ADDRESS_end_time + (bs_time_t)((double)(8.0*(header_len + payload_len))/bits_per_us);
+  TX_CRC_end_time = TX_PAYLOAD_end_time + (bs_time_t)((double)(crc_len*8)/bits_per_us);
 
   radio_sub_state = TX_WAIT_FOR_ADDRESS_END;
   Timer_RADIO = TX_ADDRESS_end_time;
@@ -995,10 +994,10 @@ static void handle_Rx_response(int ret){
     ongoing_rx_RADIO_status.packet_rejected = false;
     ongoing_rx_RADIO_status.PAYLOAD_End_Time = get_Rx_chain_delay() +
         hwll_dev_time_from_phy(ongoing_rx_done.rx_time_stamp
-            + (bs_time_t)((2+length)*8/bits_per_us));
+            + (bs_time_t)((double)((2+length)*8.0)/bits_per_us));
     ongoing_rx_RADIO_status.CRC_End_Time = get_Rx_chain_delay() +
         hwll_dev_time_from_phy(ongoing_rx_done.rx_time_stamp
-            + (bs_time_t)((2+length)*8/bits_per_us)
+            + (bs_time_t)((double)((2+length)*8.0)/bits_per_us)
             + ongoing_rx_RADIO_status.CRC_duration); //Provisional value
 
     const uint32_t rssi = RSSI_value_to_modem_format(p2G4_RSSI_value_to_dBm(ongoing_rx_done.rssi.RSSI));
@@ -1101,10 +1100,9 @@ static void start_Rx(){
   } else { //Ieee802154
     preamble_length = 1; //For MODE = Ieee802154_250Kbit the PREAMBLE is 4 bytes long and set to all zeros.
     //ongoing_tx.radio_params.modulation = P2G4_MOD_IEEE802154;
-    //bits_per_us = 0.25;
+    bits_per_us = 0.25;
 
     ongoing_rx.radio_params.modulation = P2G4_MOD_BLE;
-    bits_per_us = 1;
   }
 
   if (NRF_RADIO_regs.MODE != RADIO_MODE_MODE_Ieee802154_250Kbit) {
@@ -1117,7 +1115,7 @@ static void start_Rx(){
     address = 0x000000A7;
   }
 
-  ongoing_rx_RADIO_status.CRC_duration = (NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)*8.0/bits_per_us;
+  ongoing_rx_RADIO_status.CRC_duration = (double)((NRF_RADIO_regs.CRCCNF & RADIO_CRCCNF_LEN_Msk)*8.0)/bits_per_us;
   ongoing_rx_RADIO_status.CRC_OK = false;
   NRF_RADIO_regs.CRCSTATUS = 0;
 
@@ -1291,7 +1289,7 @@ void nrf_radio_tasks_bcstart() {
   }
   bit_counter_running = true;
   Time_BitCounterStarted = tm_get_hw_time();
-  Timer_RADIO_bitcounter = Time_BitCounterStarted + NRF_RADIO_regs.BCC/bits_per_us;
+  Timer_RADIO_bitcounter = Time_BitCounterStarted + (bs_time_t)((double)NRF_RADIO_regs.BCC/bits_per_us);
   nrf_hw_find_next_timer_to_trigger();
 }
 
@@ -1314,7 +1312,7 @@ void nrf_radio_regw_sideeffects_BCC() {
   if (!bit_counter_running){
     return;
   }
-  Timer_RADIO_bitcounter = Time_BitCounterStarted + (bs_time_t)(NRF_RADIO_regs.BCC / bits_per_us);
+  Timer_RADIO_bitcounter = Time_BitCounterStarted + (bs_time_t)((double)NRF_RADIO_regs.BCC / bits_per_us);
   if (Timer_RADIO_bitcounter < tm_get_hw_time()) {
     bs_trace_warning_line_time("NRF_RADIO: Reprogrammed bitcounter with a BCC which has already"
         "passed (%"PRItime") => we ignore it\n",
@@ -1378,7 +1376,7 @@ static void nrf_radio_tasks_ccastart() {
     return;
   }
   cca_timer_is_runing = true;
-  Timer_RADIO_cca = tm_get_hw_time() + (bs_time_t)(CCA_SURVEY_PERIOD_IN_BITS / bits_per_us);
+  Timer_RADIO_cca = tm_get_hw_time() + (bs_time_t)((double)CCA_SURVEY_PERIOD_IN_BITS / bits_per_us);
   nrf_hw_find_next_timer_to_trigger();
 }
 
