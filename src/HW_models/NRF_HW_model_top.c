@@ -79,6 +79,7 @@ extern bs_time_t Timer_AAR;
 extern bs_time_t Timer_fake_timer;
 extern bs_time_t Timer_RADIO_bitcounter;
 extern bs_time_t Timer_RADIO_cca;
+extern bs_time_t Timer_RADIO_ed;
 
 //The events priorities are as in this enum from top to bottom
 // (priority == which executes if they have the same timing)
@@ -96,6 +97,7 @@ typedef enum {
   RADIO_timer,
   RADIO_bitcounter,
   RADIO_CCA_timer,
+  RADIO_ED_timer,
   RADIO_abort_reeval_timer,
   NumberOfNRFHWTimers,
   None
@@ -114,6 +116,7 @@ static bs_time_t *Timers[NumberOfNRFHWTimers] = { //Indexed with NRF_HW_next_tim
     &Timer_RADIO,
     &Timer_RADIO_bitcounter,
     &Timer_RADIO_cca,
+    &Timer_RADIO_ed,
     &Timer_RADIO_abort_reeval //This timer should always be the latest in this list (lowest priority)
 };
 
@@ -200,6 +203,9 @@ void nrf_hw_some_timer_reached() {
     bs_trace_raw_manual_time(8, tm_get_abs_time(),"NRF HW: RADIO CCA timer\n");
     nrf_radio_cca_timer_triggered();
     break;
+  case RADIO_ED_timer:
+    bs_trace_raw_manual_time(8, tm_get_abs_time(),"NRF HW: RADIO ED timer\n");
+    nrf_radio_ed_timer_triggered();
   default:
     bs_trace_error_line("nrf_hw_next_timer_to_trigger corrupted\n");
     break;

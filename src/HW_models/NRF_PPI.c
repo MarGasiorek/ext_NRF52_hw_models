@@ -90,10 +90,12 @@ static const ppi_tasks_table_t ppi_tasks_table[]={ //just the ones we may use
     //{ (void*)&NRF_RADIO_regs.TASKS_START,        nrf_radio_tasks_start},
     //{ (void*)&NRF_RADIO_regs.TASKS_STOP,         nrf_radio_tasks_stop},
     { (void*)&NRF_RADIO_regs.TASKS_DISABLE,      nrf_radio_tasks_disable},
-    //{ (void*)&NRF_RADIO_regs.TASKS_RSSISTART,    nrf_radio_tasks_rssistart},
-    //{ (void*)&NRF_RADIO_regs.TASKS_RSSISTOP,     nrf_radio_tasks_rssistop},
-    //{ (void*)&NRF_RADIO_regs.TASKS_BCSTART,      nrf_radio_tasks_bcstart},
-    //{ (void*)&NRF_RADIO_regs.TASKS_BCSTOP,       nrf_radio_tasks_bcstop},
+    { (void*)&NRF_RADIO_regs.TASKS_RSSISTART,    nrf_radio_tasks_rssistart},
+    { (void*)&NRF_RADIO_regs.TASKS_RSSISTOP,     nrf_radio_tasks_rssistop},
+    { (void*)&NRF_RADIO_regs.TASKS_BCSTART,      nrf_radio_tasks_bcstart},
+    { (void*)&NRF_RADIO_regs.TASKS_BCSTOP,       nrf_radio_tasks_bcstop},
+    { (void*)&NRF_RADIO_regs.TASKS_EDSTART,      nrf_radio_regw_sideeffects_TASKS_EDSTART},
+    { (void*)&NRF_RADIO_regs.TASKS_EDSTOP,       nrf_radio_regw_sideeffects_TASKS_EDSTOP},
 
     //TIMER0:
     { (void*)&NRF_TIMER_regs[0].TASKS_CAPTURE[0],  nrf_timer0_TASK_CAPTURE_0},

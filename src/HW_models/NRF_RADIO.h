@@ -17,6 +17,7 @@ extern NRF_RADIO_Type NRF_RADIO_regs;
 void nrf_radio_init();
 void nrf_radio_clean_up();
 void nrf_radio_timer_triggered();
+void nrf_radio_ed_timer_triggered();
 void nrf_pre_irq_radio_disable();
 void nrf_radio_timer_abort_reeval_triggered();
 
@@ -44,6 +45,8 @@ void nrf_radio_regw_sideeffects_TASKS_RXEN();
 void nrf_radio_regw_sideeffects_TASKS_TXEN();
 void nrf_radio_regw_sideeffects_INTENSET();
 void nrf_radio_regw_sideeffects_INTENCLR();
+void nrf_radio_regw_sideeffects_TASKS_EDSTART();
+void nrf_radio_regw_sideeffects_TASKS_EDSTOP();
 
 #ifdef __cplusplus
 }

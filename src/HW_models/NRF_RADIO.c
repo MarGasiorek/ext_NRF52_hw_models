@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include "bs_rand_main.h"
 #include "bs_types.h"
 #include "bs_tracing.h"
 #include "bs_utils.h"
@@ -22,6 +23,7 @@
 
 /* 8 symbols, where 1 symbol = 4 bits -> IEEE 802.15.4 */
 #define CCA_SURVEY_PERIOD_IN_BITS (8.0 * 4.0)
+#define ED_SAMPLE_TIME_IN_BITS (8.0 * 4.0)
 
 /**
  * RADIO — 2.4 GHz Radio
@@ -73,6 +75,7 @@ bs_time_t Timer_RADIO = TIME_NEVER; //main radio timer
 bs_time_t Timer_RADIO_abort_reeval = TIME_NEVER; //Abort reevaluation response timer, this timer must have the lowest priority of all events (which may cause an abort)
 bs_time_t Timer_RADIO_bitcounter = TIME_NEVER;
 bs_time_t Timer_RADIO_cca = TIME_NEVER;
+bs_time_t Timer_RADIO_ed = TIME_NEVER;
 
 static enum {TIFS_DISABLE = 0, TIFS_WAITING_FOR_DISABLE, TIFS_TRIGGERING_TRX_EN } TIFS_state = TIFS_DISABLE;
 bool TIFS_ToTxNotRx = false;
@@ -160,6 +163,7 @@ static void radio_reset() {
   TIFS_ToTxNotRx = false;
   Timer_TIFS = TIME_NEVER;
   Timer_RADIO_cca = TIME_NEVER;
+  Timer_RADIO_ed = TIME_NEVER;
 
   Timer_RADIO_bitcounter = TIME_NEVER;
   bit_counter_running = 0;
@@ -433,6 +437,47 @@ void nrf_radio_regw_sideeffects_POWER(){
     }
   }
 }
+
+
+// Energy Detection
+void nrf_radio_regw_sideeffects_TASKS_EDSTART(){
+  //We don't need to model this as per now
+  if ( NRF_RADIO_regs.TASKS_EDSTART ){
+    NRF_RADIO_regs.TASKS_EDSTART = 0;
+    bs_trace_warning_line_time("RADIO: Sampling RSSI by writing to TASK_EDSTART register is not supported by the model\n");
+  }
+  Timer_RADIO_ed = tm_get_hw_time() + (bs_time_t)((ED_SAMPLE_TIME_IN_BITS / bits_per_us) * (NRF_RADIO_regs.EDCNT + 1));
+  nrf_hw_find_next_timer_to_trigger();
+
+}
+
+
+const uint8_t calculate_ed_sample()
+{
+  // This is mock function.
+  // Return last received RSSI value. 
+  // The correct implementation should collect 8 samples in the time between ED_START and ED_END, and return mean value
+  return NRF_RADIO->RSSISAMPLE;
+}
+
+void nrf_radio_ed_timer_triggered()
+{
+  NRF_RADIO->EDSAMPLE = calculate_ed_sample();
+  NRF_RADIO_regs.EVENTS_EDEND=1;
+  nrf_ppi_event(RADIO_EVENTS_EDEND);
+}
+
+void nrf_radio_regw_sideeffects_TASKS_EDSTOP(){
+  
+  //We don't need to model this as per now
+  if ( NRF_RADIO_regs.TASKS_EDSTOP ){
+    NRF_RADIO_regs.TASKS_EDSTOP = 0;
+    bs_trace_warning_line_time("RADIO: Sampling RSSI by writing to TASK_EDSTOP register is not supported by the model\n");
+  }
+  Timer_RADIO_ed = TIME_NEVER;
+  nrf_hw_find_next_timer_to_trigger();
+}
+// Energy Detection end
 
 static void signal_READY(){
   NRF_RADIO_regs.EVENTS_READY = 1;
